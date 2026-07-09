@@ -28,7 +28,7 @@ uv pip install -p .venv/bin/python -e .
 .venv/bin/nrfm validate    # run data-quality kill-switch checks only
 .venv/bin/nrfm status      # store statistics
 .venv/bin/nrfm signals     # today's regime + target portfolio (read-only)
-.venv/bin/nrfm daily       # nightly decision run; emails trade list on action
+.venv/bin/nrfm daily       # nightly decision run; emails trade list or heartbeat
 .venv/bin/nrfm equity [SEK]  # show/set portfolio size (order amounts in emails)
 .venv/bin/nrfm backtest    # historical simulation [--start] [--end]
 .venv/bin/nrfm hold add|rm|list [TICKER]   # record actual Avanza holdings
@@ -39,9 +39,11 @@ uv pip install -p .venv/bin/python -e .
 ## Daily operation (manual execution loop)
 
 1. Cron runs `update` then `daily` every trading evening (18:30 UTC).
-2. If action is needed (regime flip, catastrophe stop, monthly
-   rebalance), a trade-list email arrives; otherwise silence. Data
-   problems always email.
+2. An email arrives every trading evening: a trade list if action is
+   needed (regime flip, catastrophe stop, monthly rebalance), otherwise
+   a heartbeat with regime, holdings, and the paper track record. No
+   email on a weekday means the pipeline is broken. Data problems
+   always email.
 3. Execute the listed orders at next morning's opening auction in
    Avanza, then mirror them: `nrfm hold add/rm TICKER`.
 4. Keep `nrfm equity` roughly current so emails show SEK amounts.

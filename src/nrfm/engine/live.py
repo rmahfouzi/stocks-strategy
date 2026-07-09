@@ -2,7 +2,8 @@
 
 Mirrors the backtest event logic (decide at close, execute at tomorrow's
 opening auction) using the same select_portfolio() code path. Emits an
-email-ready report; emails go out only when there is something to do.
+email-ready report: a trade list when there is something to do, otherwise
+a short heartbeat confirming the run -- silence always means failure.
 
 Events, in priority order (STRATEGY.md section 11):
   1. regime flip to RISK_OFF  -> sell everything
@@ -145,6 +146,27 @@ def performance_summary(store: Store) -> str:
         f"  current value {eq.iloc[-1]:,.0f} SEK   max drawdown {dd:.1%}   "
         f"trades {len(result.trades)}",
     ]
+    return "\n".join(lines)
+
+
+def format_heartbeat(report: DailyReport, holdings: list[str],
+                     equity: float | None) -> str:
+    """Body for the no-action nights: proof the pipeline ran, so that
+    silence always means something is broken."""
+    lines = [
+        f"NRFM heartbeat -- nightly run OK, data as of close {report.as_of}",
+        f"regime: {report.regime}",
+        f"event: {report.reason} -- nothing to execute",
+        "",
+    ]
+    if holdings:
+        lines.append(f"holdings ({len(holdings)}): " + ", ".join(holdings))
+    else:
+        lines.append("holdings: (none -- all cash)")
+    if equity is not None:
+        lines.append(f"portfolio equity: {equity:,.0f} SEK")
+    lines += ["", "This email arrives every trading evening. If it stops "
+              "on a weekday, the pipeline is broken -- check data/logs/."]
     return "\n".join(lines)
 
 

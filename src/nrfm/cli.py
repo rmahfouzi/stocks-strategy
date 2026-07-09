@@ -9,7 +9,8 @@
     nrfm email-test  send a test email using the configured SMTP settings
     nrfm signals     compute today's regime + target portfolio (read-only)
     nrfm daily       nightly decision run: emails a trade list when action
-                     is needed (regime flip, stop, monthly rebalance)
+                     is needed (regime flip, stop, monthly rebalance),
+                     otherwise a heartbeat confirming the run succeeded
     nrfm equity      show or set portfolio size in SEK (for order amounts)
     nrfm backtest    run the historical simulation and print the report
     nrfm hold        record actual holdings: hold add T | rm T | list
@@ -285,7 +286,17 @@ def cmd_daily(store: Store) -> int:
             return 1
         _log("signal email sent")
     else:
-        _log("no action required -- no email sent")
+        from nrfm.engine.live import format_heartbeat, performance_summary
+        hb_body = format_heartbeat(report, store.holdings(), equity)
+        hb_body += "\n\n" + performance_summary(store)
+        send_err = try_send_email(
+            f"[NRFM] heartbeat ({report.as_of}): {report.regime}, no action",
+            hb_body,
+        )
+        if send_err:
+            _log(f"heartbeat email failed: {send_err}")
+            return 1
+        _log("no action required -- heartbeat email sent")
     return 0
 
 

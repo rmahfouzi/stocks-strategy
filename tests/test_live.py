@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 
 from nrfm import config
-from nrfm.engine.live import (DailyReport, check_stops, format_report,
-                              STATE_LAST_REBALANCE, build_daily_report)
+from nrfm.engine.live import (DailyReport, check_stops, format_heartbeat,
+                              format_report, STATE_LAST_REBALANCE,
+                              build_daily_report)
 from nrfm.engine.panels import Panels
 from nrfm.store import Store
 
@@ -43,6 +44,43 @@ def test_format_report_paper_trading_note_and_amounts():
     body_big = format_report(report, equity=100_000.0)
     assert "PAPER TRADING" not in body_big
     assert "10,000 SEK" in body_big
+
+
+def test_format_heartbeat_shows_state():
+    report = DailyReport(as_of="2026-07-09", regime="RISK_ON")
+    body = format_heartbeat(report, ["A.ST", "B.ST"], equity=100_000.0)
+    assert "nightly run OK" in body
+    assert "regime: RISK_ON" in body
+    assert "holdings (2): A.ST, B.ST" in body
+    assert "100,000 SEK" in body
+
+    body_cash = format_heartbeat(report, [], equity=None)
+    assert "all cash" in body_cash
+    assert "SEK" not in body_cash
+
+
+def test_cmd_daily_sends_heartbeat_when_no_action(tmp_path, monkeypatch):
+    import nrfm.cli as cli
+    import nrfm.engine.live as live
+    import nrfm.inbox as inbox
+
+    store = Store(tmp_path / "t.sqlite")
+    monkeypatch.setattr(inbox, "process_inbox", lambda s: 0)
+    monkeypatch.setattr(cli, "_kill_switch_check", lambda s: None)
+    monkeypatch.setattr(
+        live, "build_daily_report",
+        lambda s: DailyReport(as_of="2026-07-09", regime="RISK_ON"))
+    sent = []
+    monkeypatch.setattr(
+        cli, "try_send_email",
+        lambda subject, body: sent.append((subject, body)) or None)
+
+    assert cli.cmd_daily(store) == 0
+    (subject, body), = sent
+    assert subject == "[NRFM] heartbeat (2026-07-09): RISK_ON, no action"
+    assert "nightly run OK" in body
+    assert "observation start" in body  # performance section is appended
+    store.close()
 
 
 def test_daily_report_risk_off_with_holdings_sells_all(tmp_path,
